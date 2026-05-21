@@ -1,0 +1,16 @@
+{
+  "name": "africa-pay",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "functions",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "echo 'Build pipeline set in next steps'",
+    "lint": "echo 'Lint pipeline set in next steps'",
+    "test": "echo 'Test pipeline set in next steps'"
+  }
+}
