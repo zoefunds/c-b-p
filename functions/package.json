@@ -1,0 +1,17 @@
+{
+  "name": "@africa-pay/functions",
+  "private": true,
+  "version": "0.1.0",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "serve": "firebase emulators:start --only functions,firestore,auth"
+  },
+  "dependencies": {
+    "firebase-admin": "12.6.0",
+    "firebase-functions": "5.1.1"
+  },
+  "devDependencies": {
+    "typescript": "5.5.4"
+  }
+}
