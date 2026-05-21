@@ -3,11 +3,13 @@ import { MockFxEngine } from "./fx/mockFxEngine";
 import { TransferOrchestrator } from "./orchestrator/transferOrchestrator";
 import { LedgerRepository } from "./repositories/ledgerRepository";
 import { TransactionRepository } from "./repositories/transactionRepository";
+import { BaseRelayer } from "./relayer/baseRelayer";
 
 const ledgerRepo = new LedgerRepository();
 const txRepo = new TransactionRepository();
 const fx = new MockFxEngine();
-const orchestrator = new TransferOrchestrator(ledgerRepo, txRepo, fx);
+const relayer = new BaseRelayer();
+const orchestrator = new TransferOrchestrator(ledgerRepo, txRepo, fx, relayer);
 
 export const health = onRequest(async (_req, res) => {
   await ledgerRepo.seedUsers();

@@ -14,6 +14,7 @@ export interface User {
   email: string;
   nairaBalance: number;
   cedisBalance: number;
+  walletAddress: `0x${string}`;
 }
 
 export interface LedgerEntry {

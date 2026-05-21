@@ -1,21 +1,37 @@
 import { db } from "../db/firebase";
-import { LedgerEntry } from "../domain/types";
+import { LedgerEntry, User } from "../domain/types";
 
 const users = db.collection("users");
 const ledger = db.collection("ledger_entries");
 
 export class LedgerRepository {
   async seedUsers(): Promise<void> {
-    const defaults = [
-      { id: "user_ng_1", email: "sender@africapay.dev", nairaBalance: 2_000_000, cedisBalance: 0 },
-      { id: "user_gh_1", email: "receiver@africapay.dev", nairaBalance: 0, cedisBalance: 50 }
+    const defaults: User[] = [
+      {
+        id: "user_ng_1",
+        email: "sender@africapay.dev",
+        nairaBalance: 2_000_000,
+        cedisBalance: 0,
+        walletAddress: "0x1111111111111111111111111111111111111111"
+      },
+      {
+        id: "user_gh_1",
+        email: "receiver@africapay.dev",
+        nairaBalance: 0,
+        cedisBalance: 50,
+        walletAddress: "0x2222222222222222222222222222222222222222"
+      }
     ];
 
     const batch = db.batch();
-    for (const u of defaults) {
-      batch.set(users.doc(u.id), u, { merge: true });
-    }
+    for (const u of defaults) batch.set(users.doc(u.id), u, { merge: true });
     await batch.commit();
+  }
+
+  async getUser(userId: string): Promise<User> {
+    const snap = await users.doc(userId).get();
+    if (!snap.exists) throw new Error(`User not found: ${userId}`);
+    return snap.data() as User;
   }
 
   async debitNgn(userId: string, amount: number, reference: string): Promise<void> {
@@ -24,7 +40,7 @@ export class LedgerRepository {
       const snap = await trx.get(userRef);
       if (!snap.exists) throw new Error(`User not found: ${userId}`);
 
-      const user = snap.data() as { nairaBalance: number };
+      const user = snap.data() as User;
       if (user.nairaBalance < amount) throw new Error("Insufficient NGN balance");
 
       trx.update(userRef, { nairaBalance: user.nairaBalance - amount });
@@ -49,7 +65,7 @@ export class LedgerRepository {
       const snap = await trx.get(userRef);
       if (!snap.exists) throw new Error(`User not found: ${userId}`);
 
-      const user = snap.data() as { cedisBalance: number };
+      const user = snap.data() as User;
       trx.update(userRef, { cedisBalance: (user.cedisBalance ?? 0) + amount });
 
       const entryRef = ledger.doc();

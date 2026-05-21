@@ -2,12 +2,14 @@ import { MockFxEngine } from "../fx/mockFxEngine";
 import { Transaction, TransferRequest } from "../domain/types";
 import { LedgerRepository } from "../repositories/ledgerRepository";
 import { TransactionRepository } from "../repositories/transactionRepository";
+import { BaseRelayer } from "../relayer/baseRelayer";
 
 export class TransferOrchestrator {
   constructor(
     private readonly ledger: LedgerRepository,
     private readonly store: TransactionRepository,
-    private readonly fxEngine: MockFxEngine
+    private readonly fxEngine: MockFxEngine,
+    private readonly relayer: BaseRelayer
   ) {}
 
   async execute(request: TransferRequest): Promise<Transaction> {
@@ -21,8 +23,7 @@ export class TransferOrchestrator {
       idempotencyKey: request.idempotencyKey
     });
 
-    if (tx.status === "COMPLETED") return tx;
-    if (tx.status === "FAILED") return tx;
+    if (tx.status === "COMPLETED" || tx.status === "FAILED") return tx;
 
     try {
       if (tx.status === "INITIATED") {
@@ -39,7 +40,12 @@ export class TransferOrchestrator {
 
       const afterFx = (await this.store.getById(tx.id))!;
       if (afterFx.status === "FX_CONVERTED") {
-        const txHash = `0xmock${Math.random().toString(16).slice(2).padEnd(12, "0")}`;
+        const receiver = await this.ledger.getUser(afterFx.receiverId);
+        const txHash = await this.relayer.settleUsdc({
+          transferId: afterFx.id,
+          recipient: receiver.walletAddress,
+          usdcAmount: afterFx.usdcAmount ?? 0
+        });
         await this.store.updateState(afterFx.id, "USDC_SENT", { txHash });
       }
 
