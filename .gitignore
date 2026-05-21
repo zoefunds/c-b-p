@@ -1,0 +1,18 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Build outputs
+functions/lib/
+.next/
+dist/
+coverage/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS / editors
+.DS_Store
+.vscode/
