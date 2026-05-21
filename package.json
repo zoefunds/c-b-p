@@ -6,7 +6,8 @@
     "apps/*",
     "services/*",
     "functions",
-    "packages/*"
+    "packages/*",
+    "blockchain"
   ],
   "scripts": {
     "build": "echo 'Build pipeline set in next steps'",
