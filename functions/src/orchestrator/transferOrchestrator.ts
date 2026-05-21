@@ -1,17 +1,17 @@
 import { MockFxEngine } from "../fx/mockFxEngine";
-import { InMemoryLedger } from "../ledger/inMemoryLedger";
-import { InMemoryTransactionStore } from "../store/inMemoryTransactionStore";
 import { Transaction, TransferRequest } from "../domain/types";
+import { LedgerRepository } from "../repositories/ledgerRepository";
+import { TransactionRepository } from "../repositories/transactionRepository";
 
 export class TransferOrchestrator {
   constructor(
-    private readonly ledger: InMemoryLedger,
-    private readonly store: InMemoryTransactionStore,
+    private readonly ledger: LedgerRepository,
+    private readonly store: TransactionRepository,
     private readonly fxEngine: MockFxEngine
   ) {}
 
   async execute(request: TransferRequest): Promise<Transaction> {
-    const tx = this.store.createOrGet({
+    const tx = await this.store.createOrGet({
       senderId: request.senderId,
       receiverId: request.receiverId,
       fromCurrency: "NGN",
@@ -22,25 +22,47 @@ export class TransferOrchestrator {
     });
 
     if (tx.status === "COMPLETED") return tx;
+    if (tx.status === "FAILED") return tx;
 
     try {
-      this.ledger.debitNgn(tx.senderId, tx.amount, tx.id);
-      this.store.updateState(tx.id, "NAIRA_DEBITED", { ngnDebited: tx.amount });
+      if (tx.status === "INITIATED") {
+        await this.ledger.debitNgn(tx.senderId, tx.amount, tx.id);
+        await this.store.updateState(tx.id, "NAIRA_DEBITED", { ngnDebited: tx.amount });
+      }
 
-      const usdc = this.fxEngine.convertNgnToUsdc(tx.amount);
-      const ghs = this.fxEngine.convertUsdcToGhs(usdc);
-      this.store.updateState(tx.id, "FX_CONVERTED", { usdcAmount: usdc, ghsAmount: ghs });
+      const afterDebit = (await this.store.getById(tx.id))!;
+      if (afterDebit.status === "NAIRA_DEBITED") {
+        const usdc = this.fxEngine.convertNgnToUsdc(afterDebit.amount);
+        const ghs = this.fxEngine.convertUsdcToGhs(usdc);
+        await this.store.updateState(afterDebit.id, "FX_CONVERTED", { usdcAmount: usdc, ghsAmount: ghs });
+      }
 
-      const txHash = `0xmock${Math.random().toString(16).slice(2).padEnd(12, "0")}`;
-      this.store.updateState(tx.id, "USDC_SENT", { txHash });
+      const afterFx = (await this.store.getById(tx.id))!;
+      if (afterFx.status === "FX_CONVERTED") {
+        const txHash = `0xmock${Math.random().toString(16).slice(2).padEnd(12, "0")}`;
+        await this.store.updateState(afterFx.id, "USDC_SENT", { txHash });
+      }
 
-      this.ledger.creditGhs(tx.receiverId, ghs, tx.id);
-      this.store.updateState(tx.id, "CEDIS_CREDITED");
+      const afterUsdc = (await this.store.getById(tx.id))!;
+      if (afterUsdc.status === "USDC_SENT") {
+        await this.ledger.creditGhs(afterUsdc.receiverId, afterUsdc.ghsAmount ?? 0, afterUsdc.id);
+        await this.store.updateState(afterUsdc.id, "CEDIS_CREDITED");
+      }
 
-      return this.store.updateState(tx.id, "COMPLETED");
+      const afterCredit = (await this.store.getById(tx.id))!;
+      if (afterCredit.status === "CEDIS_CREDITED") {
+        return await this.store.updateState(afterCredit.id, "COMPLETED");
+      }
+
+      return (await this.store.getById(tx.id))!;
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "Unknown error";
-      return this.store.updateState(tx.id, "FAILED", { txHash: reason });
+      const failed = (await this.store.getById(tx.id))!;
+      if (failed.status !== "FAILED" && failed.status !== "COMPLETED") {
+        return await this.store.updateState(tx.id, "FAILED", {
+          txHash: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+      return failed;
     }
   }
 }
